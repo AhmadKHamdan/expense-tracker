@@ -43,6 +43,25 @@ export function Dashboard() {
       .sort((a, b) => b.value - a.value)
   }, [monthTx, categories])
 
+  // per-currency flows this month, in original currencies (no conversion).
+  // exchanges count on both sides: what you gave flows out, what you received flows in.
+  const byCurrency = useMemo(() => {
+    const map = new Map<string, { moneyIn: number; moneyOut: number }>()
+    const add = (currency: string, moneyIn: number, moneyOut: number) => {
+      const cur = map.get(currency) ?? { moneyIn: 0, moneyOut: 0 }
+      map.set(currency, { moneyIn: cur.moneyIn + moneyIn, moneyOut: cur.moneyOut + moneyOut })
+    }
+    for (const t of monthTx) {
+      if (t.type === 'income') add(t.currency, t.amount, 0)
+      else if (t.type === 'expense') add(t.currency, 0, t.amount)
+      else {
+        add(t.currency, 0, t.amount)
+        if (t.toCurrency && t.toAmount) add(t.toCurrency, t.toAmount, 0)
+      }
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [monthTx])
+
   const last6Months = useMemo(() => {
     const months: { key: string; label: string; income: number; expense: number }[] = []
     const now = new Date()
@@ -91,6 +110,35 @@ export function Dashboard() {
           </p>
         )}
       </div>
+
+      {byCurrency.length > 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 mb-4">
+          <h2 className="mb-2 text-sm font-medium text-slate-300">Currencies this month</h2>
+          <div className="grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-x-3 gap-y-1.5 text-sm">
+            <span />
+            <span className="text-right text-[11px] font-medium text-slate-500">In</span>
+            <span className="text-right text-[11px] font-medium text-slate-500">Out</span>
+            <span className="text-right text-[11px] font-medium text-slate-500">Net</span>
+            {byCurrency.map(([cur, v]) => {
+              const flow = v.moneyIn - v.moneyOut
+              return (
+                <div key={cur} className="col-span-4 grid grid-cols-subgrid items-center border-t border-slate-800/60 pt-1.5">
+                  <span className="font-medium text-slate-200">{cur}</span>
+                  <span className="text-right text-emerald-400">
+                    {v.moneyIn > 0 ? `+${formatMoney(v.moneyIn, cur)}` : '—'}
+                  </span>
+                  <span className="text-right text-rose-400">
+                    {v.moneyOut > 0 ? `-${formatMoney(v.moneyOut, cur)}` : '—'}
+                  </span>
+                  <span className={`text-right font-medium ${flow >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {formatMoney(flow, cur)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 mb-4">
         <h2 className="mb-2 text-sm font-medium text-slate-300">Spending by category</h2>

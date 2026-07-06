@@ -83,6 +83,7 @@ export function Transactions() {
                     category={categories.find((c) => c.id === t.categoryId)}
                     onDelete={deleteTransaction}
                     onSettle={(id) => updateTransaction(id, { settled: true })}
+                    onSave={updateTransaction}
                   />
                 ))}
               </ul>
