@@ -17,9 +17,11 @@ export function AddTransaction() {
   const [note, setNote] = useState('')
   const [date, setDate] = useState(() => localDateString())
 
-  // exchange fields
+  // exchange fields — default to the user's usual USD → ILS
   const [toCurrency, setToCurrency] = useState(
-    settings.currencies.find((c) => c !== settings.baseCurrency) ?? settings.baseCurrency
+    settings.currencies.includes('ILS') && settings.baseCurrency !== 'ILS'
+      ? 'ILS'
+      : (settings.currencies.find((c) => c !== settings.baseCurrency) ?? settings.baseCurrency)
   )
   const [rate, setRate] = useState('')
   const [toAmount, setToAmount] = useState('')

@@ -17,17 +17,13 @@ export function Dashboard() {
     [transactions, month]
   )
 
-  const income = monthTx
-    .filter((t) => t.type === 'income')
-    .reduce((sum, t) => sum + toBaseCurrency(t.amount, t.currency), 0)
-  const expense = monthTx
-    .filter((t) => t.type === 'expense')
-    .reduce((sum, t) => sum + toBaseCurrency(t.amount, t.currency), 0)
-  const net = income - expense
-
   const owedToMe = transactions
     .filter((t) => t.owedAmount != null && t.owedAmount > 0 && !t.settled)
     .reduce((sum, t) => sum + toBaseCurrency(t.owedAmount!, t.currency), 0)
+
+  // total currency to summarize everything into (ILS if available, else base)
+  const totalCurrency = settings.rates['ILS'] != null ? 'ILS' : settings.baseCurrency
+  const totalRate = settings.rates[totalCurrency] ?? 1
 
   const byCategory = useMemo(() => {
     const map = new Map<string, number>()
@@ -62,6 +58,10 @@ export function Dashboard() {
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   }, [monthTx])
 
+  // net across every currency, converted into the total currency (ILS)
+  const totalNet =
+    byCurrency.reduce((sum, [cur, v]) => sum + toBaseCurrency(v.moneyIn - v.moneyOut, cur), 0) * totalRate
+
   const last6Months = useMemo(() => {
     const months: { key: string; label: string; income: number; expense: number }[] = []
     const now = new Date()
@@ -89,56 +89,49 @@ export function Dashboard() {
         />
       </div>
 
-      <div className="rounded-2xl bg-gradient-to-br from-emerald-600/20 to-slate-900 border border-slate-800 p-5 mb-4">
-        <p className="text-sm text-slate-400">Net this month</p>
-        <p className={`text-3xl font-bold ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {formatMoney(net, settings.baseCurrency)}
-        </p>
-        <div className="mt-4 flex justify-between text-sm">
-          <div>
-            <p className="text-slate-400">Income</p>
-            <p className="font-semibold text-emerald-400">{formatMoney(income, settings.baseCurrency)}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-slate-400">Expenses</p>
-            <p className="font-semibold text-rose-400">{formatMoney(expense, settings.baseCurrency)}</p>
-          </div>
-        </div>
+      <div className="rounded-2xl bg-gradient-to-br from-emerald-600/20 to-slate-900 border border-slate-800 p-4 mb-4">
+        <h2 className="mb-3 text-sm font-medium text-slate-300">This month</h2>
+        {byCurrency.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-500">No activity this month yet.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-x-3 gap-y-1.5 text-sm">
+              <span />
+              <span className="text-right text-[11px] font-medium text-slate-500">In</span>
+              <span className="text-right text-[11px] font-medium text-slate-500">Out</span>
+              <span className="text-right text-[11px] font-medium text-slate-500">Net</span>
+              {byCurrency.map(([cur, v]) => {
+                const flow = v.moneyIn - v.moneyOut
+                return (
+                  <div key={cur} className="col-span-4 grid grid-cols-subgrid items-center border-t border-slate-800/60 pt-1.5">
+                    <span className="font-medium text-slate-200">{cur}</span>
+                    <span className="text-right text-emerald-400">
+                      {v.moneyIn > 0 ? `+${formatMoney(v.moneyIn, cur)}` : '—'}
+                    </span>
+                    <span className="text-right text-rose-400">
+                      {v.moneyOut > 0 ? `-${formatMoney(v.moneyOut, cur)}` : '—'}
+                    </span>
+                    <span className={`text-right font-medium ${flow >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {formatMoney(flow, cur)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="mt-3 flex items-center justify-between border-t border-slate-700 pt-3">
+              <span className="text-sm text-slate-400">Total net (in {totalCurrency})</span>
+              <span className={`text-lg font-bold ${totalNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {formatMoney(totalNet, totalCurrency)}
+              </span>
+            </div>
+          </>
+        )}
         {owedToMe > 0 && (
           <p className="mt-3 border-t border-slate-800 pt-2 text-sm text-amber-400">
-            Friends owe you ≈ {formatMoney(owedToMe, settings.baseCurrency)}
+            Friends owe you ≈ {formatMoney(owedToMe * totalRate, totalCurrency)}
           </p>
         )}
       </div>
-
-      {byCurrency.length > 0 && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 mb-4">
-          <h2 className="mb-2 text-sm font-medium text-slate-300">Currencies this month</h2>
-          <div className="grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-x-3 gap-y-1.5 text-sm">
-            <span />
-            <span className="text-right text-[11px] font-medium text-slate-500">In</span>
-            <span className="text-right text-[11px] font-medium text-slate-500">Out</span>
-            <span className="text-right text-[11px] font-medium text-slate-500">Net</span>
-            {byCurrency.map(([cur, v]) => {
-              const flow = v.moneyIn - v.moneyOut
-              return (
-                <div key={cur} className="col-span-4 grid grid-cols-subgrid items-center border-t border-slate-800/60 pt-1.5">
-                  <span className="font-medium text-slate-200">{cur}</span>
-                  <span className="text-right text-emerald-400">
-                    {v.moneyIn > 0 ? `+${formatMoney(v.moneyIn, cur)}` : '—'}
-                  </span>
-                  <span className="text-right text-rose-400">
-                    {v.moneyOut > 0 ? `-${formatMoney(v.moneyOut, cur)}` : '—'}
-                  </span>
-                  <span className={`text-right font-medium ${flow >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {formatMoney(flow, cur)}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 mb-4">
         <h2 className="mb-2 text-sm font-medium text-slate-300">Spending by category</h2>
