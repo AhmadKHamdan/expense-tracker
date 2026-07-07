@@ -1,7 +1,17 @@
 import { useRef, useState } from 'react'
 import { Download, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useAppData } from '../lib/AppDataContext'
 import { CategoryIcon } from '../components/CategoryIcon'
+import { CategoryRow } from '../components/CategoryRow'
 import { SyncSection } from '../components/SyncSection'
 import type { TransactionType } from '../types'
 
@@ -16,8 +26,18 @@ const COLOR_CHOICES = [
 ]
 
 export function Settings() {
-  const { categories, settings, addCategory, deleteCategory, updateSettings, fetchLiveRates, exportData, importData } =
-    useAppData()
+  const {
+    categories,
+    settings,
+    addCategory,
+    updateCategory,
+    deleteCategory,
+    reorderCategories,
+    updateSettings,
+    fetchLiveRates,
+    exportData,
+    importData,
+  } = useAppData()
 
   const [newCatName, setNewCatName] = useState('')
   const [newCatType, setNewCatType] = useState<TransactionType>('expense')
@@ -29,6 +49,17 @@ export function Settings() {
   const [catFilter, setCatFilter] = useState<TransactionType>('expense')
   const [importStatus, setImportStatus] = useState<{ ok: boolean; msg: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const filteredCats = categories.filter((c) => c.type === catFilter)
+
+  function handleCategoryDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const ids = filteredCats.map((c) => c.id)
+    const newIds = arrayMove(ids, ids.indexOf(active.id as string), ids.indexOf(over.id as string))
+    reorderCategories(catFilter, newIds)
+  }
 
   function handleExport() {
     const blob = new Blob([exportData()], { type: 'application/json' })
@@ -182,41 +213,6 @@ export function Settings() {
       </section>
 
       <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <h2 className="mb-1 text-sm font-medium text-slate-300">Backup</h2>
-        <p className="mb-3 text-xs text-slate-500">
-          Download all your data as a file, or restore from a backup made on another device.
-        </p>
-        <div className="flex gap-2">
-          <button
-            onClick={handleExport}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-500/15 py-2 text-sm font-medium text-emerald-300"
-          >
-            <Download size={15} /> Export
-          </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-sky-500/15 py-2 text-sm font-medium text-sky-300"
-          >
-            <Upload size={15} /> Import
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void handleImportFile(f)
-              e.target.value = ''
-            }}
-          />
-        </div>
-        {importStatus && (
-          <p className={`mt-2 text-xs ${importStatus.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{importStatus.msg}</p>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-medium text-slate-300">Categories</h2>
           <div className="flex rounded-lg border border-slate-800 bg-slate-950 p-0.5">
@@ -240,26 +236,16 @@ export function Settings() {
             ))}
           </div>
         </div>
-        <ul className="mb-4 space-y-1.5">
-          {categories.filter((c) => c.type === catFilter).map((c) => (
-            <li key={c.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-800/50">
-              <span
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                style={{ background: `${c.color}22` }}
-              >
-                <CategoryIcon name={c.icon} size={16} color={c.color} />
-              </span>
-              <span className="flex-1 text-sm text-slate-200">{c.name}</span>
-              <button
-                onClick={() => deleteCategory(c.id)}
-                className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-800 hover:text-rose-400"
-                aria-label={`Delete ${c.name}`}
-              >
-                <Trash2 size={16} />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <p className="mb-2 text-xs text-slate-500">Drag the handle to reorder, or tap the pencil to rename.</p>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
+          <SortableContext items={filteredCats.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            <ul className="mb-4 space-y-1">
+              {filteredCats.map((c) => (
+                <CategoryRow key={c.id} category={c} onRename={(id, name) => updateCategory(id, { name })} onDelete={deleteCategory} />
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
 
         <form onSubmit={handleAddCategory} className="space-y-2 border-t border-slate-800 pt-3">
           <div className="flex gap-2">
@@ -308,6 +294,41 @@ export function Settings() {
             <Plus size={14} /> Add category
           </button>
         </form>
+      </section>
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+        <h2 className="mb-1 text-sm font-medium text-slate-300">Backup</h2>
+        <p className="mb-3 text-xs text-slate-500">
+          Download all your data as a file, or restore from a backup made on another device.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExport}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-500/15 py-2 text-sm font-medium text-emerald-300"
+          >
+            <Download size={15} /> Export
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-sky-500/15 py-2 text-sm font-medium text-sky-300"
+          >
+            <Upload size={15} /> Import
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void handleImportFile(f)
+              e.target.value = ''
+            }}
+          />
+        </div>
+        {importStatus && (
+          <p className={`mt-2 text-xs ${importStatus.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{importStatus.msg}</p>
+        )}
       </section>
     </div>
   )

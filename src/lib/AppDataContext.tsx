@@ -19,7 +19,9 @@ interface AppDataContextValue {
   updateTransaction: (id: string, patch: Partial<Transaction>) => void
   deleteTransaction: (id: string) => void
   addCategory: (c: Omit<Category, 'id'>) => void
+  updateCategory: (id: string, patch: Partial<Category>) => void
   deleteCategory: (id: string) => void
+  reorderCategories: (type: Category['type'], orderedIds: string[]) => void
   updateSettings: (patch: Partial<Settings>) => void
   toBaseCurrency: (amount: number, currency: string) => number
   fetchLiveRates: (baseCurrency?: string) => Promise<void>
@@ -234,9 +236,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setCategories((prev) => [...prev, { ...c, id: crypto.randomUUID() }])
   }
 
+  const updateCategory: AppDataContextValue['updateCategory'] = (id, patch) => {
+    markChanged()
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+  }
+
   const deleteCategory: AppDataContextValue['deleteCategory'] = (id) => {
     markChanged()
     setCategories((prev) => prev.filter((c) => c.id !== id))
+  }
+
+  // reorder only the categories of `type`, keeping the other type's positions untouched
+  const reorderCategories: AppDataContextValue['reorderCategories'] = (type, orderedIds) => {
+    markChanged()
+    setCategories((prev) => {
+      const reordered = orderedIds
+        .map((id) => prev.find((c) => c.id === id))
+        .filter((c): c is Category => !!c && c.type === type)
+      let i = 0
+      return prev.map((c) => (c.type === type ? (reordered[i++] ?? c) : c))
+    })
   }
 
   const updateSettings: AppDataContextValue['updateSettings'] = (patch) => {
@@ -294,7 +313,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateTransaction,
       deleteTransaction,
       addCategory,
+      updateCategory,
       deleteCategory,
+      reorderCategories,
       updateSettings,
       toBaseCurrency,
       fetchLiveRates,
