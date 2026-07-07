@@ -1,5 +1,7 @@
 # 💸 Expense Tracker
 
+> ⚠️ **This project is entirely vibe-coded.** It was built by describing features to an AI assistant rather than hand-written, and does not represent my own coding expertise.
+
 A personal expense & income tracker built as a **Progressive Web App** — install it on your phone's home screen and it looks and feels like a native app, with no App Store required. Data syncs across devices through a free Supabase backend, and the app keeps working offline.
 
 **Live app:** https://expense-tracker-seven-psi-42.vercel.app
